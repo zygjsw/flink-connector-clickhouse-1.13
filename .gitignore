@@ -1,2 +1,10 @@
 
 *.class
+
+# build targets
+target/
+out/
+
+# Intellij Idea files
+.idea/
+*.iml
