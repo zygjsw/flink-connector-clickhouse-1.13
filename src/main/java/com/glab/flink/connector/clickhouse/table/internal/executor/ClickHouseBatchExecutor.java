@@ -3,9 +3,6 @@ package com.glab.flink.connector.clickhouse.table.internal.executor;
 import com.glab.flink.connector.clickhouse.table.internal.connection.ClickHouseConnectionProvider;
 import com.glab.flink.connector.clickhouse.table.internal.converter.ClickHouseRowConverter;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Service;
-import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -22,9 +19,8 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
-public class ClickHouseBatchExecutor implements ClickHouseExecutor{
+public class ClickHouseBatchExecutor implements ClickHouseExecutor {
     private static final long serialVersionUID = 1L;
 
     private static final Logger LOG = LoggerFactory.getLogger(ClickHouseBatchExecutor.class);
@@ -72,11 +68,11 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
     @Override
     public void prepareStatement(ClickHouseConnection connection) throws SQLException {
         this.batch = new ArrayList<>();
-        this.stmt = (ClickHousePreparedStatement)connection.prepareStatement(this.sql);
+        this.stmt = (ClickHousePreparedStatement) connection.prepareStatement(this.sql);
 
-        if(this.service == null) {
+        if (this.service == null) {
             this.service = new ExecuteBatchService();
-            if(!this.service.isRunning()) {
+            if (!this.service.isRunning()) {
                 this.service.startAsync();
             }
         }
@@ -88,11 +84,11 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
         this.connectionProvider = connectionProvider;
         this.stmt = (ClickHousePreparedStatement) connectionProvider.getConnection().prepareStatement(this.sql);
 
-        this.service = new ExecuteBatchService();
+        //this.service = new ExecuteBatchService();
 
-        if(this.service == null) {
+        if (this.service == null) {
             this.service = new ExecuteBatchService();
-            if(!this.service.isRunning()) {
+            if (!this.service.isRunning()) {
                 this.service.startAsync();
             }
         }
@@ -107,8 +103,8 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
 
     @Override
     public synchronized void addBatch(RowData rowData) throws IOException {
-        if(rowData.getRowKind() != RowKind.DELETE && rowData.getRowKind() != RowKind.UPDATE_BEFORE) {
-            if(this.objectReuseEnabled) {
+        if (rowData.getRowKind() != RowKind.DELETE && rowData.getRowKind() != RowKind.UPDATE_BEFORE) {
+            if (this.objectReuseEnabled) {
                 this.batch.add(this.typeSerializer.copy(rowData));
             } else {
                 this.batch.add(rowData);
@@ -118,7 +114,7 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
 
     @Override
     public synchronized void executeBatch() throws IOException {
-        if(this.service.isRunning()) {
+        if (this.service.isRunning()) {
             notifyAll();
         } else {
             throw new IOException("executor unexpectedly terminated", this.service.failureCause());
@@ -127,13 +123,13 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
 
     @Override
     public void closeStatement() throws SQLException {
-        if(this.service != null) {
+        if (this.service != null) {
             this.service.stopAsync().awaitTerminated();
         } else {
             LOG.warn("executor closed before initialized");
         }
 
-        if(this.stmt != null) {
+        if (this.stmt != null) {
             this.stmt.close();
             this.stmt = null;
         }
@@ -144,15 +140,16 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
         return ClickHouseBatchExecutor.this.service.state().toString();
     }
 
-    private class ExecuteBatchService extends AbstractExecutionThreadService{
-        private ExecuteBatchService() {}
+    private class ExecuteBatchService extends AbstractExecutionThreadService {
+        private ExecuteBatchService() {
+        }
 
         @Override
         protected void run() throws Exception {
-            while(isRunning()) {
-                synchronized(ClickHouseBatchExecutor.this) {
+            while (isRunning()) {
+                synchronized (ClickHouseBatchExecutor.this) {
                     ClickHouseBatchExecutor.this.wait(ClickHouseBatchExecutor.this.flushInterval.toMillis());
-                    if(!ClickHouseBatchExecutor.this.batch.isEmpty()) {
+                    if (!ClickHouseBatchExecutor.this.batch.isEmpty()) {
                         for (RowData rowData : ClickHouseBatchExecutor.this.batch) {
                             ClickHouseBatchExecutor.this.converter.toClickHouse(rowData, ClickHouseBatchExecutor.this.stmt);
                             ClickHouseBatchExecutor.this.stmt.addBatch();
@@ -163,26 +160,26 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor{
             }
         }
 
-        private void attemptExecuteBatch() throws Exception{
-            for(int idx = 1; idx <= ClickHouseBatchExecutor.this.maxRetries; idx++) {
+        private void attemptExecuteBatch() throws Exception {
+            for (int idx = 1; idx <= ClickHouseBatchExecutor.this.maxRetries; idx++) {
                 try {
                     ClickHouseBatchExecutor.this.stmt.executeBatch();
                     ClickHouseBatchExecutor.this.batch.clear();
 
                     ClickHouseBatchExecutor.this.stmt.clearBatch();
                     break;
-                }catch (ClickHouseException e1) {
+                } catch (ClickHouseException e1) {
                     ClickHouseBatchExecutor.LOG.error("ClickHouse error", e1);
                     //当出现ClickHouse exception, code: 27 ...DB::Exception: Cannot parse input 即这条数据是错误时,略过此次插入
                     int errorCode = e1.getErrorCode();
-                    if(errorCode == 27) {
+                    if (errorCode == 27) {
                         ClickHouseBatchExecutor.this.stmt.clearBatch();
                         ClickHouseBatchExecutor.this.batch.clear();
                         break;
                     }
-                }catch (SQLException e2) {
+                } catch (SQLException e2) {
                     ClickHouseBatchExecutor.LOG.error("ClickHouse executeBatch error, retry times = {}", Integer.valueOf(idx), e2);
-                    if(idx >= ClickHouseBatchExecutor.this.maxRetries){
+                    if (idx >= ClickHouseBatchExecutor.this.maxRetries) {
                         throw new IOException(e2);
                     }
                     try {
