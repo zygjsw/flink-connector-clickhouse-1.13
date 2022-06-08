@@ -84,6 +84,7 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor {
         this.connectionProvider = connectionProvider;
         this.stmt = (ClickHousePreparedStatement) connectionProvider.getConnection().prepareStatement(this.sql);
 
+        //写入时报错,注释掉下面这句即可
         //this.service = new ExecuteBatchService();
 
         if (this.service == null) {
