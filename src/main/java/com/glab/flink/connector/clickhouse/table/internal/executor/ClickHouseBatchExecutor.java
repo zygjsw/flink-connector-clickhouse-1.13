@@ -51,12 +51,7 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor {
 
     private transient ExecuteBatchService service;
 
-    public ClickHouseBatchExecutor(String sql,
-                                   ClickHouseRowConverter converter,
-                                   Duration flushInterval,
-                                   int batchSize,
-                                   int maxRetries,
-                                   TypeInformation<RowData> rowDataTypeInformation) {
+    public ClickHouseBatchExecutor(String sql, ClickHouseRowConverter converter, Duration flushInterval, int batchSize, int maxRetries, TypeInformation<RowData> rowDataTypeInformation) {
         this.sql = sql;
         this.converter = converter;
         this.flushInterval = flushInterval;
@@ -84,7 +79,7 @@ public class ClickHouseBatchExecutor implements ClickHouseExecutor {
         this.connectionProvider = connectionProvider;
         this.stmt = (ClickHousePreparedStatement) connectionProvider.getConnection().prepareStatement(this.sql);
 
-        //写入时报错,注释掉下面这句即可
+        //写入时若报错可注释掉下面这句
         //this.service = new ExecuteBatchService();
 
         if (this.service == null) {
